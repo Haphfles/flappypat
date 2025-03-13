@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Supermarket Sprint</title>
+    <title>Flappy Pat</title>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700&display=swap" rel="stylesheet">
     <style>
         html, body {
@@ -37,7 +37,6 @@
         const ctx = canvas.getContext('2d');
         const ui = document.getElementById('ui');
 
-        // Set canvas to full screen
         function resizeCanvas() {
             canvas.width = window.innerWidth;
             canvas.height = window.innerHeight;
@@ -45,11 +44,9 @@
         window.addEventListener('resize', resizeCanvas);
         resizeCanvas();
 
-        // Load the player image
         const playerImage = new Image();
         playerImage.src = 'pat.png';
 
-        // Load collectible images
         const collectibleImages = {
             sarahc: new Image(),
             ciara: new Image(),
@@ -59,12 +56,11 @@
         collectibleImages.ciara.src = 'ciara.png';
         collectibleImages.luke.src = 'luke.png';
 
-        // Game Variables
         let player = {
             x: 100,
             y: canvas.height / 2,
-            width: 40,  // Default, will be overridden
-            height: 30, // Default, will be overridden
+            width: 40,
+            height: 30,
             speed: 5,
             vy: 0,
             lift: -0.5,
@@ -73,7 +69,8 @@
         let inventory = [];
         let score = 0;
         let timeLeft = 60;
-        let gameActive = true;
+        let gameActive = false;
+        let gameStarted = false;
         let worldOffset = 0;
 
         let collectibles = [];
@@ -86,7 +83,6 @@
         let keys = { left: false, right: false, up: false };
         const scrollSpeed = 3;
 
-        // UI elements
         const restartButton = {
             x: canvas.width / 2 - 50,
             y: canvas.height / 2 + 40,
@@ -98,19 +94,23 @@
             y: canvas.height / 2 - 20
         };
 
-        // Wait for all images to load before starting
+        const startButton = {
+            x: canvas.width / 2 - 50,
+            y: canvas.height / 2 + 80,
+            width: 100,
+            height: 40
+        };
+
         let imagesLoaded = 0;
-        const totalImages = 4; // player + 3 collectibles
+        const totalImages = 4;
         function checkAllImagesLoaded() {
             imagesLoaded++;
             if (imagesLoaded === totalImages) {
-                // Set player dimensions
                 const playerAspectRatio = playerImage.naturalWidth / playerImage.naturalHeight;
                 const desiredPlayerWidth = 130;
                 player.width = desiredPlayerWidth;
                 player.height = desiredPlayerWidth / playerAspectRatio;
 
-                // Start the game
                 resetGame();
                 gameLoop();
             }
@@ -120,7 +120,6 @@
         collectibleImages.ciara.onload = checkAllImagesLoaded;
         collectibleImages.luke.onload = checkAllImagesLoaded;
 
-        // Draw function
         function draw() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
@@ -134,7 +133,6 @@
 
             collectibles.forEach(c => {
                 if (!c.taken) {
-                    // Draw collectible image instead of circle
                     ctx.drawImage(c.image, c.x - worldOffset - c.width / 2, c.y - c.height / 2, c.width, c.height);
                 }
             });
@@ -147,22 +145,41 @@
             ctx.drawImage(playerImage, player.x, player.y, player.width, player.height);
 
             if (!gameActive) {
-                ctx.fillStyle = '#000';
-                ctx.font = '60px Montserrat';
-                ctx.textAlign = 'center';
-                ctx.fillText(`${score}`, scoreDisplay.x, scoreDisplay.y);
+                if (!gameStarted) {
+                    // Draw start screen with updated message
+                    ctx.fillStyle = '#000';
+                    ctx.fillRect(canvas.width / 2 - 150, canvas.height / 2 - 100, 300, 200);
+                    ctx.fillStyle = '#fff';
+                    ctx.font = '20px Montserrat';
+                    ctx.textAlign = 'center';
+                    ctx.fillText('Welcome to Flappy Pat!', canvas.width / 2, canvas.height / 2 - 60);
+                    ctx.font = '16px Montserrat';
+                    ctx.fillText('Controls:', canvas.width / 2, canvas.height / 2 - 20);
+                    ctx.fillText('- Space bar: Keep flying', canvas.width / 2, canvas.height / 2 + 10);
+                    ctx.fillText('- G: Destroy', canvas.width / 2, canvas.height / 2 + 40);
 
-                ctx.fillStyle = '#000';
-                ctx.fillRect(restartButton.x, restartButton.y, restartButton.width, restartButton.height);
-                ctx.fillStyle = '#fff';
-                ctx.font = '16px Montserrat';
-                ctx.fillText('Restart', restartButton.x + restartButton.width / 2, restartButton.y + restartButton.height / 2 + 5);
+                    ctx.fillStyle = '#000';
+                    ctx.fillRect(startButton.x, startButton.y, startButton.width, startButton.height);
+                    ctx.fillStyle = '#fff';
+                    ctx.font = '16px Montserrat';
+                    ctx.fillText('Start', startButton.x + startButton.width / 2, startButton.y + startButton.height / 2 + 5);
+                } else {
+                    ctx.fillStyle = '#000';
+                    ctx.font = '60px Montserrat';
+                    ctx.textAlign = 'center';
+                    ctx.fillText(`${score}`, scoreDisplay.x, scoreDisplay.y);
+
+                    ctx.fillStyle = '#000';
+                    ctx.fillRect(restartButton.x, restartButton.y, restartButton.width, restartButton.height);
+                    ctx.fillStyle = '#fff';
+                    ctx.font = '16px Montserrat';
+                    ctx.fillText('Restart', restartButton.x + restartButton.width / 2, restartButton.y + restartButton.height / 2 + 5);
+                }
             }
 
             ui.textContent = `Time: ${Math.ceil(timeLeft)} | Score: ${score}`;
         }
 
-        // Reset game state with random collectible images
         function resetGame() {
             player.x = 100;
             player.y = canvas.height / 2;
@@ -170,7 +187,7 @@
             inventory = [];
             score = 0;
             timeLeft = 60;
-            gameActive = true;
+            gameActive = gameStarted;
             worldOffset = 0;
             collectibles = [];
 
@@ -179,7 +196,7 @@
                 const imageName = imageNames[i];
                 const image = collectibleImages[imageName];
                 const aspectRatio = image.naturalWidth / image.naturalHeight;
-                const desiredWidth = 30; // Matches original circle diameter
+                const desiredWidth = 30;
                 const height = desiredWidth / aspectRatio;
 
                 collectibles.push({
@@ -199,7 +216,6 @@
             keys = { left: false, right: false, up: false };
         }
 
-        // Physics and movement
         function updatePhysics() {
             if (keys.up) {
                 player.vy += player.lift;
@@ -234,7 +250,6 @@
             particles = particles.filter(p => p.life > 0);
         }
 
-        // Spawn elements
         function spawnElements() {
             if (Math.random() < 0.02) {
                 const height = Math.random() * 80 + 20;
@@ -268,14 +283,13 @@
             collectibles = collectibles.filter(c => c.x - worldOffset > -100);
         }
 
-        // Grab collectibles
         function grabItem() {
             collectibles.forEach((c, index) => {
                 if (!c.taken) {
                     const dx = player.x + player.width / 2 - (c.x - worldOffset);
                     const dy = player.y + player.height / 2 - c.y;
                     const distance = Math.sqrt(dx * dx + dy * dy);
-                    if (distance < (c.width / 2) + (player.width / 2)) { // Adjusted for image width
+                    if (distance < (c.width / 2) + (player.width / 2)) {
                         c.taken = true;
                         score += 1;
                         for (let i = 0; i < 20; i++) {
@@ -293,27 +307,20 @@
             });
         }
 
-        // Game loop
         function gameLoop() {
-            if (!gameActive) {
-                draw();
-                return;
+            if (gameActive) {
+                worldOffset += scrollSpeed;
+                updatePhysics();
+                spawnElements();
+                timeLeft -= 1 / 60;
+                if (timeLeft <= 0) {
+                    gameActive = false;
+                }
             }
-
-            worldOffset += scrollSpeed;
-            updatePhysics();
-            spawnElements();
             draw();
-            timeLeft -= 1 / 60;
-
-            if (timeLeft <= 0) {
-                gameActive = false;
-            }
-
             requestAnimationFrame(gameLoop);
         }
 
-        // Keyboard controls
         document.addEventListener('keydown', (e) => {
             if (!gameActive) return;
 
@@ -349,19 +356,23 @@
         });
 
         canvas.addEventListener('click', (e) => {
-            if (!gameActive) {
-                const rect = canvas.getBoundingClientRect();
-                const clickX = e.clientX - rect.left;
-                const clickY = e.clientY - rect.top;
+            const rect = canvas.getBoundingClientRect();
+            const clickX = e.clientX - rect.left;
+            const clickY = e.clientY - rect.top;
+
+            if (!gameStarted) {
+                if (clickX >= startButton.x && clickX <= startButton.x + startButton.width &&
+                    clickY >= startButton.y && clickY <= startButton.y + startButton.height) {
+                    gameStarted = true;
+                    gameActive = true;
+                }
+            } else if (!gameActive) {
                 if (clickX >= restartButton.x && clickX <= restartButton.x + restartButton.width &&
                     clickY >= restartButton.y && clickY <= restartButton.y + restartButton.height) {
                     resetGame();
-                    gameLoop();
                 }
             }
         });
-
-        // Game starts in checkAllImagesLoaded
     </script>
 </body>
 </html>
