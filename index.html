@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Supermarket Sprint</title>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700&display=swap" rel="stylesheet">
+    <style>
+        html, body {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            overflow: hidden;
+            font-family: 'Montserrat', sans-serif;
+            background-color: #fff;
+        }
+        #gameCanvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+        #ui {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: #000;
+            font-size: 2vw;
+        }
+    </style>
+</head>
+<body>
+    <div id="ui">Time: 60 | Score: 0</div>
+    <canvas id="gameCanvas"></canvas>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const ui = document.getElementById('ui');
+
+        // Set canvas to full screen
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        // Load the player image
+        const playerImage = new Image();
+        playerImage.src = 'pat.png';
+
+        // Load collectible images
+        const collectibleImages = {
+            sarahc: new Image(),
+            ciara: new Image(),
+            luke: new Image()
+        };
+        collectibleImages.sarahc.src = 'sarahc.png';
+        collectibleImages.ciara.src = 'ciara.png';
+        collectibleImages.luke.src = 'luke.png';
+
+        // Game Variables
+        let player = {
+            x: 100,
+            y: canvas.height / 2,
+            width: 40,  // Default, will be overridden
+            height: 30, // Default, will be overridden
+            speed: 5,
+            vy: 0,
+            lift: -0.5,
+            gravity: 0.3
+        };
+        let inventory = [];
+        let score = 0;
+        let timeLeft = 60;
+        let gameActive = true;
+        let worldOffset = 0;
+
+        let collectibles = [];
+        let obstacles = [
+            { x: 150, y: canvas.height - 80, width: 50, height: 80 },
+            { x: 300, y: canvas.height - 50, width: 80, height: 50 }
+        ];
+
+        let particles = [];
+        let keys = { left: false, right: false, up: false };
+        const scrollSpeed = 3;
+
+        // UI elements
+        const restartButton = {
+            x: canvas.width / 2 - 50,
+            y: canvas.height / 2 + 40,
+            width: 100,
+            height: 40
+        };
+        const scoreDisplay = {
+            x: canvas.width / 2,
+            y: canvas.height / 2 - 20
+        };
+
+        // Wait for all images to load before starting
+        let imagesLoaded = 0;
+        const totalImages = 4; // player + 3 collectibles
+        function checkAllImagesLoaded() {
+            imagesLoaded++;
+            if (imagesLoaded === totalImages) {
+                // Set player dimensions
+                const playerAspectRatio = playerImage.naturalWidth / playerImage.naturalHeight;
+                const desiredPlayerWidth = 130;
+                player.width = desiredPlayerWidth;
+                player.height = desiredPlayerWidth / playerAspectRatio;
+
+                // Start the game
+                resetGame();
+                gameLoop();
+            }
+        }
+        playerImage.onload = checkAllImagesLoaded;
+        collectibleImages.sarahc.onload = checkAllImagesLoaded;
+        collectibleImages.ciara.onload = checkAllImagesLoaded;
+        collectibleImages.luke.onload = checkAllImagesLoaded;
+
+        // Draw function
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            ctx.fillStyle = '#000';
+            ctx.fillRect(0, canvas.height - 50, canvas.width, 50);
+
+            ctx.fillStyle = '#000';
+            obstacles.forEach(obstacle => {
+                ctx.fillRect(obstacle.x - worldOffset, obstacle.y, obstacle.width, obstacle.height);
+            });
+
+            collectibles.forEach(c => {
+                if (!c.taken) {
+                    // Draw collectible image instead of circle
+                    ctx.drawImage(c.image, c.x - worldOffset - c.width / 2, c.y - c.height / 2, c.width, c.height);
+                }
+            });
+
+            ctx.fillStyle = '#000';
+            particles.forEach(p => {
+                ctx.fillRect(p.x - worldOffset, p.y, p.size, p.size);
+            });
+
+            ctx.drawImage(playerImage, player.x, player.y, player.width, player.height);
+
+            if (!gameActive) {
+                ctx.fillStyle = '#000';
+                ctx.font = '60px Montserrat';
+                ctx.textAlign = 'center';
+                ctx.fillText(`${score}`, scoreDisplay.x, scoreDisplay.y);
+
+                ctx.fillStyle = '#000';
+                ctx.fillRect(restartButton.x, restartButton.y, restartButton.width, restartButton.height);
+                ctx.fillStyle = '#fff';
+                ctx.font = '16px Montserrat';
+                ctx.fillText('Restart', restartButton.x + restartButton.width / 2, restartButton.y + restartButton.height / 2 + 5);
+            }
+
+            ui.textContent = `Time: ${Math.ceil(timeLeft)} | Score: ${score}`;
+        }
+
+        // Reset game state with random collectible images
+        function resetGame() {
+            player.x = 100;
+            player.y = canvas.height / 2;
+            player.vy = 0;
+            inventory = [];
+            score = 0;
+            timeLeft = 60;
+            gameActive = true;
+            worldOffset = 0;
+            collectibles = [];
+
+            const imageNames = ['sarahc', 'ciara', 'luke'];
+            for (let i = 0; i < 3; i++) {
+                const imageName = imageNames[i];
+                const image = collectibleImages[imageName];
+                const aspectRatio = image.naturalWidth / image.naturalHeight;
+                const desiredWidth = 30; // Matches original circle diameter
+                const height = desiredWidth / aspectRatio;
+
+                collectibles.push({
+                    x: 200 + Math.random() * (canvas.width - 400),
+                    y: Math.random() * (canvas.height - 200) + 100,
+                    width: desiredWidth,
+                    height: height,
+                    image: image,
+                    taken: false
+                });
+            }
+            obstacles = [
+                { x: 150, y: canvas.height - 80, width: 50, height: 80 },
+                { x: 300, y: canvas.height - 50, width: 80, height: 50 }
+            ];
+            particles = [];
+            keys = { left: false, right: false, up: false };
+        }
+
+        // Physics and movement
+        function updatePhysics() {
+            if (keys.up) {
+                player.vy += player.lift;
+            } else {
+                player.vy += player.gravity;
+            }
+            player.vy = Math.max(-5, Math.min(5, player.vy));
+            player.y += player.vy;
+
+            if (keys.left && player.x > 0) player.x -= player.speed;
+            if (keys.right && player.x < canvas.width / 4) player.x += player.speed;
+
+            if (player.y > canvas.height) {
+                gameActive = false;
+            }
+
+            obstacles.forEach(obstacle => {
+                const ox = obstacle.x - worldOffset;
+                if (player.x + player.width > ox && player.x < ox + obstacle.width &&
+                    player.y + player.height > obstacle.y && player.y < obstacle.y + obstacle.height) {
+                    gameActive = false;
+                }
+            });
+
+            player.y = Math.max(0, player.y);
+
+            particles.forEach(p => {
+                p.x += p.vx;
+                p.y += p.vy;
+                p.life--;
+            });
+            particles = particles.filter(p => p.life > 0);
+        }
+
+        // Spawn elements
+        function spawnElements() {
+            if (Math.random() < 0.02) {
+                const height = Math.random() * 80 + 20;
+                obstacles.push({
+                    x: worldOffset + canvas.width + 50,
+                    y: canvas.height - height - 50,
+                    width: Math.random() * 60 + 20,
+                    height: height
+                });
+            }
+
+            if (Math.random() < 0.01) {
+                const imageNames = ['sarahc', 'ciara', 'luke'];
+                const randomImageName = imageNames[Math.floor(Math.random() * imageNames.length)];
+                const image = collectibleImages[randomImageName];
+                const aspectRatio = image.naturalWidth / image.naturalHeight;
+                const desiredWidth = 30;
+                const height = desiredWidth / aspectRatio;
+
+                collectibles.push({
+                    x: worldOffset + canvas.width + 50,
+                    y: Math.random() * (canvas.height - 200) + 100,
+                    width: desiredWidth,
+                    height: height,
+                    image: image,
+                    taken: false
+                });
+            }
+
+            obstacles = obstacles.filter(o => o.x - worldOffset > -100);
+            collectibles = collectibles.filter(c => c.x - worldOffset > -100);
+        }
+
+        // Grab collectibles
+        function grabItem() {
+            collectibles.forEach((c, index) => {
+                if (!c.taken) {
+                    const dx = player.x + player.width / 2 - (c.x - worldOffset);
+                    const dy = player.y + player.height / 2 - c.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    if (distance < (c.width / 2) + (player.width / 2)) { // Adjusted for image width
+                        c.taken = true;
+                        score += 1;
+                        for (let i = 0; i < 20; i++) {
+                            particles.push({
+                                x: c.x,
+                                y: c.y,
+                                vx: (Math.random() - 0.5) * 4,
+                                vy: (Math.random() - 0.5) * 4,
+                                size: Math.random() * 3 + 1,
+                                life: 30
+                            });
+                        }
+                    }
+                }
+            });
+        }
+
+        // Game loop
+        function gameLoop() {
+            if (!gameActive) {
+                draw();
+                return;
+            }
+
+            worldOffset += scrollSpeed;
+            updatePhysics();
+            spawnElements();
+            draw();
+            timeLeft -= 1 / 60;
+
+            if (timeLeft <= 0) {
+                gameActive = false;
+            }
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Keyboard controls
+        document.addEventListener('keydown', (e) => {
+            if (!gameActive) return;
+
+            switch (e.key) {
+                case 'ArrowLeft':
+                    keys.left = true;
+                    break;
+                case 'ArrowRight':
+                    keys.right = true;
+                    break;
+                case ' ':
+                    keys.up = true;
+                    break;
+                case 'g':
+                case 'G':
+                    grabItem();
+                    break;
+            }
+        });
+
+        document.addEventListener('keyup', (e) => {
+            switch (e.key) {
+                case 'ArrowLeft':
+                    keys.left = false;
+                    break;
+                case 'ArrowRight':
+                    keys.right = false;
+                    break;
+                case ' ':
+                    keys.up = false;
+                    break;
+            }
+        });
+
+        canvas.addEventListener('click', (e) => {
+            if (!gameActive) {
+                const rect = canvas.getBoundingClientRect();
+                const clickX = e.clientX - rect.left;
+                const clickY = e.clientY - rect.top;
+                if (clickX >= restartButton.x && clickX <= restartButton.x + restartButton.width &&
+                    clickY >= restartButton.y && clickY <= restartButton.y + restartButton.height) {
+                    resetGame();
+                    gameLoop();
+                }
+            }
+        });
+
+        // Game starts in checkAllImagesLoaded
+    </script>
+</body>
+</html>
